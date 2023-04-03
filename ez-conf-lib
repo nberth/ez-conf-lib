@@ -109,6 +109,16 @@ if test -z "$pkg"; then pkg="conf-$libname"; fi;
 ########################################################################
 # some helper functions
 
+# checks given argument is an absolute path
+checkabs () {
+    # https://unix.stackexchange.com/questions/256434/check-if-shell-variable-contains-an-absolute-path
+    case "$1" in (/*) pathchk -- "$1";; (*) ! : ;; esac;
+}
+
+abs () {
+    checkabs "$1" && echo "$1";
+}
+
 # [checkcomp cc] checks that compiler [cc] can compile a simple program
 checkcomp () {
     testcc="$1";
@@ -171,7 +181,7 @@ lookup_lib () {
 	# findutils
 	if test -n "$(find "$d" -maxdepth 1 -name "lib$testlib.*" \
 	    	      	                    -print -quit 2>/dev/null)"; then
-	    echo "$(dirname $d/.)";
+	    echo "$(dirname "$d/.")";
 	    break;
 	fi;
     done;
@@ -197,7 +207,6 @@ checklib () {
     fi
     return $r;
 }
-
 
 # Tries to find both the library and its C header.  
 findprefix () {
@@ -252,6 +261,21 @@ findprefix "$cc" "$libheader" "$libname" \
 	   "" $try_prefixes /usr /usr/local || \
     err "$libname not found; pass further possible prefixes \
     	 after '--' on the command line";
+
+# Check we have absolute directories.
+
+r=0;
+if ! checkabs "$incdir"; then
+    info "error: header directory ($incdir) is relative";
+    r=$(( $r + 1 ));
+fi;
+
+if ! checkabs "$libdir"; then
+    info "error: library directory ($libdir) is relative";
+    r=$(( $r + 1 ));
+fi;
+
+test $r -gt 0 && exit 1;
 
 ########################################################################
 # generation
