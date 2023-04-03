@@ -26,18 +26,28 @@
 # 
 ########################################################################
 
+default_cc="$(ocamlc -config | sed -e '/^native_c_compiler/!d; s/^[^:]*: *//;')";
+env_cffags="$CFLAGS":
+env_cppflags="$CPPFLAGS";
+env_ldflags="$LDFLAGS";
+
 usage () {
     cat <<EOF
-usage: ez-conf-lib libname libheader.h test.c [options] [ -- { try-prefixes } ]
+usage: ez-conf-lib libname libheader.h test.c [options] [ -- { try-prefix } ]
 
 where options include:
   --package-name <pkg> name of the opam package for which a .config is generated
 
 Environment variables that affect configuration:
-  CC                   C compiler to use (default $$(ocamlc -config-var c_compiler))
+  CC                   C compiler to use (default $default_cc)
   CPPFLAGS             extra C preprocessor flags
   CFLAGS               extra C compiler flags
   LDFLAGS              extra link flags
+
+Assignments to the above variables may be given directly on the
+command line (before the \`--' separator); with, \`CC=gcc' for
+instance.  Assignments to *FLAGS are appended to any pre-existing
+defintions in the environment.
 
 EOF
     exit 0;
@@ -73,6 +83,14 @@ while test $# '>' 0; do
 	--package-name)
 	    pkg="$(arg "$1" "$2")";
 	    shift;;
+	CC=*)
+	    CC="${1#CC=}";;
+	CPPFLAGS=*)
+	    CPPFLAGS="${1#CPPFLAGS=}";;
+	CFLAGS=*)
+	    CFLAGS="${1#CFLAGS=}";;
+	LDFLAGS=*)
+	    LDFLAGS="${1#LDFLAGS=}";;
 	-h | --help)
 	    usage;;
 	*)
@@ -82,6 +100,9 @@ while test $# '>' 0; do
     shift 2>/dev/null; 
 done
 try_prefixes="$@";
+CPPFLAGS="$env_cppflags $CPPFLAGS";
+CFLAGS="$env_cflags $CFLAGS";
+LDFLAGS="$env_ldflags $LDFLAGS";
 
 if test -z "$pkg"; then pkg="conf-$libname"; fi;
 
@@ -216,7 +237,7 @@ findprefix () {
 # C compiler
 
 cc="none";
-for i in $CC "$(ocamlc -config | sed -e '/^native_c_compiler/!d; s/^[^:]*: *//;')"; do
+for i in $CC "$default_cc"; do
     if checkcomp "$i $CPPFLAGS $CFLAGS $LDFLAGS"; then
 	cc="$i $CPPFLAGS $CFLAGS $LDFLAGS";
 	break;
