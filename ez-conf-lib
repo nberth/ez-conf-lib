@@ -1,0 +1,246 @@
+#!/bin/sh
+########################################################################
+#
+# Copyright (C) 2023  Nicolas Berthier <mail@nberth.space>
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# 
+########################################################################
+#
+# The purpose of this script is to search a library <lib> and it's
+# header (a single one is assumed), and generate a `conf-<lib>.config`
+# file with suitable variables for opam.  This script was based on the
+# configuration script for `mlgmpidl`, itself originally based on the
+# configure script for `apron`.
+# 
+########################################################################
+
+usage () {
+    cat <<EOF
+usage: ez-conf-lib libname libheader.h test.c [options] [ -- { try-prefixes } ]
+
+where options include:
+  --package-name <pkg> name of the opam package for which a .config is generated
+
+Environment variables that affect configuration:
+  CC                   C compiler to use (default $$(ocamlc -config-var c_compiler))
+  CPPFLAGS             extra C preprocessor flags
+  CFLAGS               extra C compiler flags
+  LDFLAGS              extra link flags
+
+EOF
+    exit 0;
+}
+
+########################################################################
+# utilities
+
+echo_n () { echo "$1" | tr -d '\012' 1>&2; }
+info () { echo "$1" 1>&2; }
+err () { echo "$1" 1>&2; exit 1; }
+arr () { echo "Missing argument for \`$1'!" 1>&2; usage; exit 1; }
+arg () { test "x$2" != "x" && echo "$2" || arr "$1"; }
+
+########################################################################
+# parse arguments
+
+if test $# -lt 3; then
+    info "$0: missing argument(s)";
+    ( usage );
+    exit 1;
+fi;
+libname="$1"; shift;
+libheader="$1"; shift;
+test_c="$1"; shift;
+pkg="";
+
+while test $# '>' 0; do
+    case "$1" in
+	"--")
+	    shift;
+	    break;;
+	--package-name)
+	    pkg="$(arg "$1" "$2")";
+	    shift;;
+	-h | --help)
+	    usage;;
+	*)
+	    info "unknown option $1, try --help";
+	    exit 2;;
+    esac;
+    shift 2>/dev/null; 
+done
+try_prefixes="$@";
+
+if test -z "$pkg"; then pkg="conf-$libname"; fi;
+
+########################################################################
+# some helper functions
+
+# [checkcomp cc] checks that compiler [cc] can compile a simple program
+checkcomp () {
+    testcc="$1";
+    r=0;
+    echo_n "checking compilation with $testcc: ";
+    rm -f tmp.c tmp.out;
+    echo "int main() { return 1; }" > tmp.c;
+    $testcc tmp.c -o tmp.out >/dev/null 2>/dev/null || r=1;
+    if test ! -x tmp.out; then r=1; fi
+    rm -f tmp.c tmp.o tmp.out;
+    if test $r -eq 1; then
+	info "not working";
+    else
+	info "working";
+    fi;
+    return $r;
+}
+
+# manual lookup for a C header
+lookup_inc () {
+    testcc="$1";
+    testinc="$2";
+    echo "#include <$testinc>" | $testcc -xc -E - | \
+	sed -e "s/^# 1 \"\\(.*$testinc\)\".*$/\\1/; t ok; d; :ok";
+}
+
+# checking include file
+checkinc () {
+    testcc="$1";
+    testinc="$2";
+    r=0;
+    echo_n "include $testinc: ";
+    rm -f tmp.c tmp.o;
+    echo "#include <$testinc>\nint main() { return 1; }" > tmp.c;
+    $testcc -c tmp.c -o tmp.o >/dev/null 2>/dev/null || r=1
+    if test ! -f tmp.o; then r=1; fi
+    rm -f tmp.c tmp.o
+    if test $r -eq 1; then
+	info "not found";
+    else
+	incdir="$(dirname "$(lookup_inc "$testcc" "$testinc")")";
+	info "found in $incdir";
+    fi
+    return $r;
+}
+
+# Manual lookup for a library
+lookup_lib () {
+    testcc="$1";
+    testlib="$2";
+    search_dirs="$($testcc -print-search-dirs | \
+		   sed 's_^libraries: __; t loop;
+                        d;
+                  :loop s_/[^/.][^/]*/\.\./_/_; t loop;
+                        s_[^=]*=_:_;
+                        s_;_; _g' | \
+	  	   tr \; \\012 | \
+		   tr  : \\012)";
+    for d in $search_dirs; do
+	# findutils
+	if test -n "$(find "$d" -maxdepth 1 -name "lib$testlib.*" \
+	    	      	                    -print -quit 2>/dev/null)"; then
+	    echo "$(dirname $d/.)";
+	    break;
+	fi;
+    done;
+}
+
+# Checking library
+checklib () {
+    testcc="$1";
+    testlib="$2";
+    test_c="$3";
+    r=0;
+    echo_n "library $testlib: ";
+    rm -f tmp.c tmp.out;
+    cp "$test_c" tmp.c;
+    $testcc tmp.c -l$testlib -o tmp.out 2>/dev/null 1>/dev/null || r=1;
+    if test ! -x tmp.out; then r=1; fi
+    rm -f tmp.c tmp.o tmp.out;
+    if test $r -eq 1; then
+	info "not found";
+    else
+	libdir="$(lookup_lib "$testcc" "$testlib")"
+	info "found in $libdir";
+    fi
+    return $r;
+}
+
+
+# Tries to find both the library and its C header.  
+findprefix () {
+    testcc="$1";
+    testinc="$2";
+    testlib="$3";
+    testprefix="$4";
+    shift 4;
+    # try without any prefix (unless the user forced a prefix)
+    if test "x$testprefix" = "x"; then
+	info "looking for $testlib without prefix";
+	prefix="";
+	if checkinc "$testcc" "$testinc"; then
+	    if checklib "$testcc" "$testlib" "$test_c"; then
+		return 0;
+	    fi;
+	fi;
+    fi;
+    # check with a prefix
+    for prefix in "$@"; do
+	info "looking for $testlib in prefix $prefix";
+	test -f "$prefix/include/$testinc" || continue;
+	if checkinc "$testcc -I$prefix/include" "$testinc"; then
+	    if checklib "$testcc -I$prefix/include -L$prefix/lib" \
+			"$testlib" "$test_c"; then
+		return 0;
+	    fi;
+	fi;
+    done;
+    info "library $testlib not found";
+    return 1;
+}
+
+########################################################################
+# lookups
+
+# C compiler
+
+cc="none";
+for i in $CC "$(ocamlc -config-var native_c_compiler)"; do
+    if checkcomp "$i $CPPFLAGS $CFLAGS $LDFLAGS"; then
+	cc="$i $CPPFLAGS $CFLAGS $LDFLAGS";
+	break;
+    fi;
+done;
+if test "$cc" = "none"; then err "no C compiler found"; fi;
+
+# C library
+
+prefix="";
+findprefix "$cc" "$libheader" "$libname" \
+	   "" $try_prefixes /usr /usr/local || \
+    err "$libname not found; pass further possible prefixes \
+    	 after '--' on the command line";
+
+########################################################################
+# generation
+
+info "generating $pkg.config";
+cat >"$pkg.config" <<EOF
+opam-version: "2.0"
+variables {
+  prefix: "$prefix"
+  incdir: "$incdir"
+  libdir: "$libdir"
+}
+EOF
