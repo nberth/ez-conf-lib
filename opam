@@ -10,8 +10,7 @@ dev-repo: "git+https://github.com/nberth/ez-conf-lib.git"
 bug-reports: "https://github.com/nberth/ez-conf-lib/issues"
 license: "GPL-3.0-only"
 build: [
-  [ "sed" "-e" "s_@@ez-conf-lib:lib@@_%{_:lib}%_g"
-          "-i" "ez-conf-lib.config" ]
+  [ "sh" "-ecx" "sed -e 's_@@ez-conf-lib:lib@@_%{_:lib}%_g' ez-conf-lib.config.in > ez-conf-lib.config" ]
 ]
 depends: [
   "ocaml"
