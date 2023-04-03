@@ -216,7 +216,7 @@ findprefix () {
 # C compiler
 
 cc="none";
-for i in $CC "$(ocamlc -config-var native_c_compiler)"; do
+for i in $CC "$(ocamlc -config | sed -e '/^native_c_compiler/!d; s/^[^:]*: *//;')"; do
     if checkcomp "$i $CPPFLAGS $CFLAGS $LDFLAGS"; then
 	cc="$i $CPPFLAGS $CFLAGS $LDFLAGS";
 	break;
