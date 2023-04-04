@@ -42,7 +42,8 @@ Environment variables that affect configuration:
   CC                   C compiler to use (default $default_cc)
   CPPFLAGS             extra C preprocessor flags
   CFLAGS               extra C compiler flags
-  LDFLAGS              extra link flags
+  LDFLAGS              extra \`-L' link flags
+  LIBS                 extra \`-l' link flags
 
 Assignments to the above variables may be given directly on the
 command line (before the \`--' separator); with, \`CC=gcc' for
@@ -91,6 +92,8 @@ while test $# '>' 0; do
 	    CFLAGS="${1#CFLAGS=}";;
 	LDFLAGS=*)
 	    LDFLAGS="${1#LDFLAGS=}";;
+	LIBS=*)
+	    LIBS="${1#LIBS=}";;
 	-h | --help)
 	    usage;;
 	*)
@@ -141,8 +144,11 @@ checkcomp () {
 lookup_inc () {
     testcc="$1";
     testinc="$2";
-    echo "#include <$testinc>" | $testcc -xc -E - | \
-	sed -e "s/^# 1 \"\\(.*$testinc\)\".*$/\\1/; t ok; d; :ok";
+    echo "#include <$testinc>" | \
+	$testcc -xc -E - | \
+	sed -e "/^# 1 \"[^\"]*$testinc\".*$/! d;
+	       s/^[^\"]*\"//; s/\"[^\"]*$//;" | \
+	head -n 1
 }
 
 # checking include file
@@ -169,14 +175,15 @@ checkinc () {
 lookup_lib () {
     testcc="$1";
     testlib="$2";
+    # TODO: not space-proof
+    #:loop s_/[^/.][^/]*/\.\./_/_; tloop
     search_dirs="$($testcc -print-search-dirs | \
-		   sed 's_^libraries: __; t loop;
-                        d;
-                  :loop s_/[^/.][^/]*/\.\./_/_; t loop;
-                        s_[^=]*=_:_;
-                        s_;_; _g' | \
-	  	   tr \; \\012 | \
-		   tr  : \\012)";
+		   sed -e '/^libraries: /!d;
+                           s/^libraries: //;
+                           s_[^=]*=__;
+                           s_;_; _g' | \
+		   tr \; '\012' | \
+		   tr  : '\012')";
     for d in $search_dirs; do
 	# findutils
 	if test -n "$(find "$d" -maxdepth 1 -name "lib$testlib.*" \
@@ -196,7 +203,7 @@ checklib () {
     echo_n "library $testlib: ";
     rm -f tmp.c tmp.out;
     cp "$test_c" tmp.c;
-    $testcc tmp.c -l$testlib -o tmp.out 2>/dev/null 1>/dev/null || r=1;
+    $testcc tmp.c ${LIBS} -l$testlib -o tmp.out 2>/dev/null 1>/dev/null || r=1;
     if test ! -x tmp.out; then r=1; fi
     rm -f tmp.c tmp.o tmp.out;
     if test $r -eq 1; then
@@ -232,6 +239,10 @@ findprefix () {
 	if checkinc "$testcc -I$prefix/include" "$testinc"; then
 	    if checklib "$testcc -I$prefix/include -L$prefix/lib" \
 			"$testlib" "$test_c"; then
+		if test -z "$libdir"; then
+		    # NB: workaround for our erroneous lookup on macos
+		    libdir="$prefix/lib";
+		fi;
 		return 0;
 	    fi;
 	fi;
@@ -265,12 +276,12 @@ findprefix "$cc" "$libheader" "$libname" \
 # Check we have absolute directories.
 
 r=0;
-if ! checkabs "$incdir"; then
+if test ! -z "$incdir" && ! checkabs "$incdir"; then
     info "error: header directory ($incdir) is relative";
     r=$(( $r + 1 ));
 fi;
 
-if ! checkabs "$libdir"; then
+if test ! -z "$libdir" && ! checkabs "$libdir"; then
     info "error: library directory ($libdir) is relative";
     r=$(( $r + 1 ));
 fi;
