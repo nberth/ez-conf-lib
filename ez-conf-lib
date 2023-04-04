@@ -27,9 +27,6 @@
 ########################################################################
 
 default_cc="$(ocamlc -config | sed -e '/^native_c_compiler/!d; s/^[^:]*: *//;')";
-env_cffags="$CFLAGS":
-env_cppflags="$CPPFLAGS";
-env_ldflags="$LDFLAGS";
 
 usage () {
     cat <<EOF
@@ -47,8 +44,9 @@ Environment variables that affect configuration:
 
 Assignments to the above variables may be given directly on the
 command line (before the \`--' separator); with, \`CC=gcc' for
-instance.  Assignments to *FLAGS are appended to any pre-existing
-defintions in the environment.
+instance.  Assignments to *FLAGS or LIBS may use the \`+=' sign, in
+which case the right-hand-side is appended to any pre-existing
+defintions of the variable.
 
 EOF
     exit 0;
@@ -78,34 +76,24 @@ pkg="";
 
 while test $# '>' 0; do
     case "$1" in
-	"--")
-	    shift;
-	    break;;
-	--package-name)
-	    pkg="$(arg "$1" "$2")";
-	    shift;;
-	CC=*)
-	    CC="${1#CC=}";;
-	CPPFLAGS=*)
-	    CPPFLAGS="${1#CPPFLAGS=}";;
-	CFLAGS=*)
-	    CFLAGS="${1#CFLAGS=}";;
-	LDFLAGS=*)
-	    LDFLAGS="${1#LDFLAGS=}";;
-	LIBS=*)
-	    LIBS="${1#LIBS=}";;
-	-h | --help)
-	    usage;;
-	*)
-	    info "unknown option $1, try --help";
-	    exit 2;;
+	"--")           shift; break;;
+	--package-name) pkg="$(arg "$1" "$2")"; shift;;
+	"CC="*)         CC="${1#CC=}";;
+	"CPPFLAGS="*)   CPPFLAGS="${1#CPPFLAGS=}";;
+	"CPPFLAGS+="*)  CPPFLAGS="$CPPFLAGS ${1#CPPFLAGS+=}";;
+	"CFLAGS="*)     CFLAGS="${1#CFLAGS=}";;
+	"CFLAGS+="*)    CFLAGS="$CFLAGS ${1#CFLAGS+=}";;
+	"LDFLAGS="*)    LDFLAGS="${1#LDFLAGS=}";;
+	"LDFLAGS+="*)   LDFLAGS="$LDFLAGS ${1#LDFLAGS+=}";;
+	"LIBS="*)       LIBS="${1#LIBS=}";;
+	"LIBS+="*)      LIBS="$LIBS ${1#LIBS+=}";;
+	-h | --help)    usage;;
+	*)              info "unknown option $1, try --help";
+		        exit 2;;
     esac;
     shift 2>/dev/null; 
 done
 try_prefixes="$@";
-CPPFLAGS="$env_cppflags $CPPFLAGS";
-CFLAGS="$env_cflags $CFLAGS";
-LDFLAGS="$env_ldflags $LDFLAGS";
 
 if test -z "$pkg"; then pkg="conf-$libname"; fi;
 
