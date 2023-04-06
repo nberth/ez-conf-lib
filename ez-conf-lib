@@ -26,7 +26,7 @@
 # 
 ########################################################################
 
-default_cc="$(ocamlc -config | sed -e '/^native_c_compiler/!d; s/^[^:]*: *//;')";
+default_cc="$(ocamlc -config | sed -e '/^native_c_compiler/!d' -e 's/^[^:]*: *//')";
 
 usage () {
     cat <<EOF
@@ -134,9 +134,10 @@ lookup_inc () {
     testinc="$2";
     echo "#include <$testinc>" | \
 	$testcc -xc -E - | \
-	sed -e "/^# 1 \"[^\"]*$testinc\".*$/! d;
-	       s/^[^\"]*\"//; s/\"[^\"]*$//;" | \
-	head -n 1
+	sed -e "/^# 1 \"[^\"]*$testinc\".*$/! d" \
+	    -e 's/^[^"]*"//' \
+	    -e 's/"[^"]*$//' \
+	| head -n 1
 }
 
 # checking include file
@@ -166,10 +167,14 @@ lookup_lib () {
     # TODO: not space-proof
     #:loop s_/[^/.][^/]*/\.\./_/_; tloop
     search_dirs="$($testcc -print-search-dirs | \
-		   sed -e '/^libraries: /!d;
-                           s/^libraries: //;
-                           s_[^=]*=__;
-                           s_;_; _g' | \
+		   sed -e 's/^libraries: //' \
+		       -e 'tloop' \
+		       -e 'd' \
+		       -e ':loop' \
+		       -e 's_/[^/.][^/]*/\.\./_/_' \
+		       -e 'tloop' \
+		       -e 's_[^=]*=__' \
+		       -e 's_;_; _g' | \
 		   tr \; '\012' | \
 		   tr  : '\012')";
     for d in $search_dirs; do
