@@ -26,14 +26,13 @@
 # 
 ########################################################################
 
-default_cc="$(ocamlc -config | sed -e '/^native_c_compiler/!d' -e 's/^[^:]*: *//')";
-
 usage () {
     cat <<EOF
-usage: ez-conf-lib libname libheader.h test.c [options] [ -- { try-prefix } ]
+usage: ez-conf-lib libname header.h test.c [OPTS] [ -- { try-prefix } ]
 
-where options include:
-  --package-name <pkg> name of the opam package for which a .config is generated
+where OPTS include:
+  --package-name <pkg> name of the opam package for which a .config is
+                       generated
 
 Environment variables that affect configuration:
   CC                   C compiler to use (default $default_cc)
@@ -51,6 +50,13 @@ defintions of the variable.
 EOF
     exit 0;
 }
+
+########################################################################
+# ocaml/system constants
+
+ocaml_config_var () { ocamlc -config | sed -e "/^$1/!d" -e 's/^[^:]*: *//'; }
+default_cc="$(ocaml_config_var native_c_compiler)";
+system="$(ocaml_config_var system)";
 
 ########################################################################
 # utilities
@@ -165,22 +171,36 @@ lookup_lib () {
     testcc="$1";
     testlib="$2";
     # TODO: not space-proof
-    #:loop s_/[^/.][^/]*/\.\./_/_; tloop
-    search_dirs="$($testcc $CPPFLAGS $CFLAGS $LDFLAGS -print-search-dirs | \
-		   sed -e 's/^libraries: //' \
-		       -e 'tloop' \
-		       -e 'd' \
-		       -e ':loop' \
-		       -e 's_/[^/.][^/]*/\.\./_/_' \
-		       -e 'tloop' \
-		       -e 's_[^=]*=__' \
-		       -e 's_;_; _g' | \
-		   tr \; '\012' | \
-		   tr  : '\012')";
+    case $system in
+	"macosx")
+	    search_dirs="$($testcc $CPPFLAGS $CFLAGS $LDFLAGS \
+				   -Xlinker -v /dev/null 2>&1 | \
+			   sed -e 's/^Library search paths://' \
+			       -e 'tloop' \
+			       -e 'd' \
+			       -e ':loop' \
+			       -e 'N' \
+			       -e 's/\n //g' \
+			       -e 'tloop' \
+			       -e 's/\nFramework .*$//')";;
+	*)
+	    search_dirs="$($testcc $CPPFLAGS $CFLAGS $LDFLAGS \
+				   -print-search-dirs | \
+			   sed -e 's/^libraries: //' \
+			       -e 'tloop' \
+			       -e 'd' \
+			       -e ':loop' \
+			       -e 's_/[^/.][^/]*/\.\./_/_' \
+			       -e 'tloop' \
+			       -e 's_[^=]*=__' \
+			       -e 's_;_; _g' | \
+			   tr \; '\012' | \
+			   tr  : '\012')";;
+    esac;
     for d in $search_dirs; do
 	# findutils
 	if test -n "$(find "$d" -maxdepth 1 -name "lib$testlib.*" \
-	    	      	                    -print -quit 2>/dev/null)"; then
+					    -print -quit 2>/dev/null)"; then
 	    echo "$(dirname "$d/.")";
 	    break;
 	fi;
@@ -271,7 +291,7 @@ findprefix "$cc" "$libheader" "$libname" \
 
 r=0;
 if test -z "$incdir"; then
-    info "error: header directory not found";
+    info "error: unable to locate \`$libheader'";
     r=$(( $r + 1 ));
 elif ! checkabs "$incdir"; then
     info "error: header directory ($incdir) is relative";
@@ -279,7 +299,7 @@ elif ! checkabs "$incdir"; then
 fi;
 
 if test -z "$libdir"; then
-    info "error: library directory not found";
+    info "error: unable to locate $libname library";
     r=$(( $r + 1 ));
 elif ! checkabs "$libdir"; then
     info "error: library directory ($libdir) is relative";
