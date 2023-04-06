@@ -117,7 +117,7 @@ checkcomp () {
     echo_n "checking compilation with $testcc: ";
     rm -f tmp.c tmp.out;
     echo "int main() { return 1; }" > tmp.c;
-    $testcc tmp.c -o tmp.out >/dev/null 2>/dev/null || r=1;
+    $testcc tmp.c -o tmp.out $CPPFLAGS $CFLAGS $LDFLAGS $LIBS >/dev/null 2>/dev/null || r=1;
     if test ! -x tmp.out; then r=1; fi
     rm -f tmp.c tmp.o tmp.out;
     if test $r -eq 1; then
@@ -133,7 +133,7 @@ lookup_inc () {
     testcc="$1";
     testinc="$2";
     echo "#include <$testinc>" | \
-	$testcc -xc -E - | \
+	$testcc -xc -E - $CPPFLAGS $CFLAGS | \
 	sed -e "/^# 1 \"[^\"]*$testinc\".*$/! d" \
 	    -e 's/^[^"]*"//' \
 	    -e 's/"[^"]*$//' \
@@ -148,7 +148,7 @@ checkinc () {
     echo_n "include $testinc: ";
     rm -f tmp.c tmp.o;
     echo "#include <$testinc>\nint main() { return 1; }" > tmp.c;
-    $testcc -c tmp.c -o tmp.o >/dev/null 2>/dev/null || r=1
+    $testcc -c tmp.c -o tmp.o $CPPFLAGS $CFLAGS >/dev/null 2>/dev/null || r=1
     if test ! -f tmp.o; then r=1; fi
     rm -f tmp.c tmp.o
     if test $r -eq 1; then
@@ -166,7 +166,7 @@ lookup_lib () {
     testlib="$2";
     # TODO: not space-proof
     #:loop s_/[^/.][^/]*/\.\./_/_; tloop
-    search_dirs="$($testcc -print-search-dirs | \
+    search_dirs="$($testcc $CPPFLAGS $CFLAGS $LDFLAGS -print-search-dirs | \
 		   sed -e 's/^libraries: //' \
 		       -e 'tloop' \
 		       -e 'd' \
@@ -196,7 +196,8 @@ checklib () {
     echo_n "library $testlib: ";
     rm -f tmp.c tmp.out;
     cp "$test_c" tmp.c;
-    $testcc tmp.c ${LIBS} -l$testlib -o tmp.out 2>/dev/null 1>/dev/null || r=1;
+    $testcc tmp.c $CPPFLAGS $CFLAGS $LDFLAGS $LIBS -l$testlib \
+	    -o tmp.out 2>/dev/null 1>/dev/null || r=1;
     if test ! -x tmp.out; then r=1; fi
     rm -f tmp.c tmp.o tmp.out;
     if test $r -eq 1; then
@@ -251,8 +252,8 @@ findprefix () {
 
 cc="none";
 for i in $CC "$default_cc"; do
-    if checkcomp "$i $CPPFLAGS $CFLAGS $LDFLAGS"; then
-	cc="$i $CPPFLAGS $CFLAGS $LDFLAGS";
+    if checkcomp "$i"; then
+	cc="$i";
 	break;
     fi;
 done;
