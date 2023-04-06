@@ -261,15 +261,21 @@ findprefix "$cc" "$libheader" "$libname" \
     err "$libname not found; pass further possible prefixes \
     	 after '--' on the command line";
 
-# Check we have absolute directories.
+# Check we have non-empty and absolute directories.
 
 r=0;
-if test ! -z "$incdir" && ! checkabs "$incdir"; then
+if test -z "$incdir"; then
+    info "error: header directory not found";
+    r=$(( $r + 1 ));
+elif ! checkabs "$incdir"; then
     info "error: header directory ($incdir) is relative";
     r=$(( $r + 1 ));
 fi;
 
-if test ! -z "$libdir" && ! checkabs "$libdir"; then
+if test -z "$libdir"; then
+    info "error: library directory not found";
+    r=$(( $r + 1 ));
+elif ! checkabs "$libdir"; then
     info "error: library directory ($libdir) is relative";
     r=$(( $r + 1 ));
 fi;
