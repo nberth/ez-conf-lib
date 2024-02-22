@@ -1,0 +1,63 @@
+#!/bin/sh
+########################################################################
+#
+# Copyright (C) 2024  Nicolas Berthier <mail@nberth.space>
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# 
+########################################################################
+
+usage () {
+    echo "usage: gen-config <ez-conf-lib-dir>";
+    exit 0;
+}
+
+########################################################################
+# utilities
+
+# echo_n () { echo "$1" | tr -d '\012' 1>&2; }
+info () { echo "$1" 1>&2; }
+# err () { echo "$1" 1>&2; exit 1; }
+# arr () { echo "Missing argument for \`$1'!" 1>&2; usage; exit 1; }
+# arg () { test "x$2" != "x" && echo "$2" || arr "$1"; }
+
+########################################################################
+# parse arguments
+
+if test $# -lt 1; then
+    info "$0: missing argument(s)";
+    ( usage );
+    exit 1;
+fi;
+libdir="$1"; shift;
+
+while test $# -gt 0; do
+    case "$1" in
+	-h | --help)    usage;;
+	*)              info "unknown option $1, try --help";
+		        exit 2;;
+    esac;
+    shift 2>/dev/null; 
+done
+
+########################################################################
+# generation
+
+info "generating ez-conf-lib.config";
+cat >"ez-conf-lib.config" <<EOF
+opam-version: "2.0"
+variables {
+  exe: "$libdir/ez-conf-lib"
+}
+EOF
