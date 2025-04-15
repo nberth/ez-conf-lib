@@ -52,6 +52,10 @@ EOF
 }
 
 ########################################################################
+# make sure the system talks basic English
+export LANG=C
+
+########################################################################
 # ocaml/system constants
 
 ocaml_config_var () { ocamlc -config | sed -e "/^$1/!d" -e 's/^[^:]*: *//'; }
