@@ -9,9 +9,6 @@ homepage: "https://github.com/nberth/ez-conf-lib"
 dev-repo: "git+https://github.com/nberth/ez-conf-lib.git"
 bug-reports: "https://github.com/nberth/ez-conf-lib/issues"
 license: "GPL-3.0-only"
-build: [
-  [ "sh" "-ecx" "./gen-config '%{_:lib}%'" ]
-]
 depends: [
   "ocaml"
   "conf-findutils"
