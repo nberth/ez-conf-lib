@@ -19,3 +19,10 @@ build: [
 ```
 where `gmptest.c` is a C file used to test inclusion and linking
 against the `gmplib`.
+
+Note: the `ez-conf-lib:exe` variable references an absolute path
+within the switch where `ez-conf-lib` is installed.  One may
+substitude `"%{ez-conf-lib:lib}%/ez-conf-lib"` for `ez-conf-lib:exe`
+when such references need to be avoided, for instance when building
+`conf-` packages in contexts where the opam switch needs to be
+relocabable.
