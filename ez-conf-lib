@@ -54,6 +54,7 @@ EOF
 ########################################################################
 # make sure the system talks basic English
 export LANG=C
+export LC_ALL=C
 
 ########################################################################
 # ocaml/system constants
